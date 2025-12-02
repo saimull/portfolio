@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Portfolio Tracker</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+    :root {
+        --bg: #0d1117;
+        --text: #e6edf3;
+        --card: #161b22;
+        --border: #30363d;
+        --accent: #58a6ff;
+    }
+
+    body.light {
+        --bg: #f4f7fa;
+        --text: #333;
+        --card: #ffffff;
+        --border: #ddd;
+        --accent: #1a73e8;
+    }
+
+    body {
+        background: var(--bg);
+        color: var(--text);
+        margin: 0;
+        padding: 0;
+        font-family: Arial, sans-serif;
+        transition: background 0.3s, color 0.3s;
+    }
+
+    header {
+        background: var(--accent);
+        color: white;
+        padding: 20px;
+        text-align: center;
+        position: relative;
+    }
+
+    #themeToggle {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        padding: 8px 14px;
+        background: #ffffff22;
+        border: 1px solid #fff5;
+        border-radius: 6px;
+        color: white;
+        cursor: pointer;
+    }
+
+    .container {
+        width: 95%;
+        max-width: 1100px;
+        margin: 30px auto;
+    }
+
+    .card {
+        background: var(--card);
+        color: var(--text);
+        border-radius: 8px;
+        padding: 20px;
+        margin: 20px 0;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+        transition: background 0.3s, color 0.3s;
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 15px;
+        color: var(--text);
+    }
+
+    th, td {
+        padding: 10px;
+        border-bottom: 1px solid var(--border);
+        transition: border 0.3s;
+    }
+
+    .footer {
+        text-align: center;
+        padding: 20px;
+        color: var(--text);
+        opacity: 0.7;
+    }
+</style>
+</head>
+
+<body class="dark">
+
+<header>
+    <h1>Crypto + Stock Portfolio Tracker</h1>
+    <p>Auto-Invest • Live Prices • Full KPIs</p>
+    <button id="themeToggle">☀️ Light Mode</button>
+</header>
+
+<div class="container">
+
+    <div class="card">
+        <h2>📊 Total Portfolio KPIs</h2>
+        <p><strong>Total Invested:</strong> $<span id="totalInvested">0</span></p>
+        <p><strong>Market Value:</strong> $<span id="marketValue">0</span></p>
+        <p><strong>Total Profit/Loss:</strong> $<span id="totalPL">0</span> (<span id="totalPLPercent">0</span>%)</p>
+    </div>
+
+    <div class="card">
+        <h2>💰 Crypto Holdings</h2>
+        <table id="cryptoTable">
+            <tr>
+                <th>Asset</th>
+                <th>Units</th>
+                <th>Avg Cost</th>
+                <th>Invested</th>
+                <th>Price</th>
+                <th>Value</th>
+                <th>P/L</th>
+            </tr>
+        </table>
+    </div>
+
+    <div class="card">
+        <h2>📈 Stock Holdings</h2>
+        <table id="stockTable">
+            <tr>
+                <th>Asset</th>
+                <th>Units</th>
+                <th>Avg Cost</th>
+                <th>Invested</th>
+                <th>Price</th>
+                <th>Value</th>
+                <th>P/L</th>
+            </tr>
+        </table>
+    </div>
+
+</div>
+
+<div class="footer">© 2025 Portfolio Tracker</div>
+
+<script>
+// -------------------------------------------------------
+// CONFIG
+// -------------------------------------------------------
+
+const ALPHA_KEY = "TM5H6I43G6RCU0IB";
+
+const cryptoIDs = {
+    BTC: "bitcoin",
+    ETH: "ethereum",
+    SOL: "solana",
+    ADA: "cardano",
+    XRP: "ripple",
+    AVAX: "avalanche-2"
+};
+
+const stockSymbols = ["SPY", "QQQ", "VTI"];
+
+const cryptoMonthly = 100;
+const stockMonthly = 100;
+
+const cryptoAlloc = {
+    BTC: 0.70,
+    ETH: 0.20,
+    SOL: 0.025,
+    ADA: 0.025,
+    XRP: 0.025,
+    AVAX: 0.025
+};
+
+const stockAlloc = {
+    SPY: 0.333,
+    QQQ: 0.333,
+    VTI: 0.333
+};
+
+// -------------------------------------------------------
+// STORAGE
+// -------------------------------------------------------
+
+let portfolio = JSON.parse(localStorage.getItem("portfolioData")) || {
+    crypto: {
+        BTC: { units: 0, invested: 0 },
+        ETH: { units: 0, invested: 0 },
+        SOL: { units: 0, invested: 0 },
+        ADA: { units: 0, invested: 0 },
+        XRP: { units: 0, invested: 0 },
+        AVAX: { units: 0, invested: 0 }
+    },
+    stocks: {
+        SPY: { units: 0, invested: 0 },
+        QQQ: { units: 0, invested: 0 },
+        VTI: { units: 0, invested: 0 }
+    },
+    lastInvestmentDate: null
+};
+
+function savePortfolio() {
+    localStorage.setItem("portfolioData", JSON.stringify(portfolio));
+}
+
+// -------------------------------------------------------
+// AUTO-INVEST
+// -------------------------------------------------------
+
+async function autoInvest() {
+    let today = new Date();
+    let todayStr = today.toISOString().split("T")[0];
+
+    // First ever visit → invest today
+    if (portfolio.lastInvestmentDate === null) {
+        await runInvestment();
+        portfolio.lastInvestmentDate = todayStr;
+        savePortfolio();
+        return;
+    }
+
+    // Monthly auto-buy on 1st
+    if (today.getDate() === 1 && portfolio.lastInvestmentDate !== todayStr) {
+        await runInvestment();
+        portfolio.lastInvestmentDate = todayStr;
+        savePortfolio();
+    }
+}
+
+async function runInvestment() {
+    const cryptoPrices = await fetchCryptoPrices();
+    const stockPrices = await fetchStockPrices();
+
+    // Crypto
+    for (const sym of Object.keys(cryptoAlloc)) {
+        const amount = cryptoMonthly * cryptoAlloc[sym];
+        const price = cryptoPrices[sym];
+        const units = amount / price;
+
+        portfolio.crypto[sym].units += units;
+        portfolio.crypto[sym].invested += amount;
+    }
+
+    // Stocks
+    for (const sym of Object.keys(stockAlloc)) {
+        const amount = stockMonthly * stockAlloc[sym];
+        const price = stockPrices[sym];
+        const units = amount / price;
+
+        portfolio.stocks[sym].units += units;
+        portfolio.stocks[sym].invested += amount;
+    }
+
+    savePortfolio();
+}
+
+// -------------------------------------------------------
+// PRICE FETCHING
+// -------------------------------------------------------
+
+async function fetchCryptoPrices() {
+    const ids = Object.values(cryptoIDs).join(",");
+    const url = `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd`;
+
+    const res = await fetch(url);
+    const data = await res.json();
+
+    let prices = {};
+    for (const sym of Object.keys(cryptoIDs)) {
+        prices[sym] = data[cryptoIDs[sym]].usd;
+    }
+    return prices;
+}
+
+async function fetchStockPrices() {
+    let prices = {};
+    for (const sym of stockSymbols) {
+        const url = `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${sym}&apikey=${ALPHA_KEY}`;
+        const res = await fetch(url);
+        const data = await res.json();
+        prices[sym] = parseFloat(data["Global Quote"]["05. price"]);
+    }
+    return prices;
+}
+
+// -------------------------------------------------------
+// TABLE + KPI UPDATES
+// -------------------------------------------------------
+
+async function updateUI() {
+    const cryptoPrices = await fetchCryptoPrices();
+    const stockPrices = await fetchStockPrices();
+
+    updateCryptoTable(cryptoPrices);
+    updateStockTable(stockPrices);
+    updatePortfolioKPIs(cryptoPrices, stockPrices);
+}
+
+function updateCryptoTable(prices) {
+    const table = document.getElementById("cryptoTable");
+    table.querySelectorAll("tr:not(:first-child)").forEach(e => e.remove());
+
+    for (const sym of Object.keys(portfolio.crypto)) {
+        const c = portfolio.crypto[sym];
+        if (c.units === 0) continue;
+
+        const value = c.units * prices[sym];
+        const avg = c.invested / c.units;
+        const pl = value - c.invested;
+
+        table.innerHTML += `
+            <tr>
+                <td>${sym}</td>
+                <td>${c.units.toFixed(6)}</td>
+                <td>$${avg.toFixed(2)}</td>
+                <td>$${c.invested.toFixed(2)}</td>
+                <td>$${prices[sym].toFixed(2)}</td>
+                <td>$${value.toFixed(2)}</td>
+                <td style="color:${pl >= 0 ? "lightgreen" : "red"}">$${pl.toFixed(2)}</td>
+            </tr>`;
+    }
+}
+
+function updateStockTable(prices) {
+    const table = document.getElementById("stockTable");
+    table.querySelectorAll("tr:not(:first-child)").forEach(e => e.remove());
+
+    for (const sym of stockSymbols) {
+        const s = portfolio.stocks[sym];
+        if (s.units === 0) continue;
+
+        const value = s.units * prices[sym];
+        const avg = s.invested / s.units;
+        const pl = value - s.invested;
+
+        table.innerHTML += `
+            <tr>
+                <td>${sym}</td>
+                <td>${s.units.toFixed(6)}</td>
+                <td>$${avg.toFixed(2)}</td>
+                <td>$${s.invested.toFixed(2)}</td>
+                <td>$${prices[sym].toFixed(2)}</td>
+                <td>$${value.toFixed(2)}</td>
+                <td style="color:${pl >= 0 ? "lightgreen" : "red"}">$${pl.toFixed(2)}</td>
+            </tr>`;
+    }
+}
+
+function updatePortfolioKPIs(cryptoPrices, stockPrices) {
+    let invested = 0, value = 0;
+
+    for (const sym of Object.keys(portfolio.crypto)) {
+        invested += portfolio.crypto[sym].invested;
+        value += portfolio.crypto[sym].units * cryptoPrices[sym];
+    }
+
+    for (const sym of stockSymbols) {
+        invested += portfolio.stocks[sym].invested;
+        value += portfolio.stocks[sym].units * stockPrices[sym];
+    }
+
+    const pl = value - invested;
+
+    document.getElementById("totalInvested").innerText = invested.toFixed(2);
+    document.getElementById("marketValue").innerText = value.toFixed(2);
+    document.getElementById("totalPL").innerText = pl.toFixed(2);
+    document.getElementById("totalPLPercent").innerText = ((pl / invested) * 100).toFixed(2);
+}
+
+// -------------------------------------------------------
+// DARK MODE TOGGLE
+// -------------------------------------------------------
+
+const themeToggle = document.getElementById("themeToggle");
+
+themeToggle.addEventListener("click", () => {
+    document.body.classList.toggle("light");
+
+    if (document.body.classList.contains("light")) {
+        themeToggle.textContent = "🌙 Dark Mode";
+    } else {
+        themeToggle.textContent = "☀️ Light Mode";
+    }
+});
+
+// -------------------------------------------------------
+// APP INIT
+// -------------------------------------------------------
+
+(async function main() {
+    await autoInvest();
+    await updateUI();
+})();
+</script>
+
+</body>
+</html>
