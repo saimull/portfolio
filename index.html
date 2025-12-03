@@ -135,21 +135,6 @@ h2 { font-size: 1.2em; }
         </table>
     </div>
 
-    <div class="card">
-        <h2>📈 Stock Holdings</h2>
-        <table id="stockTable">
-            <tr>
-                <th>Asset</th>
-                <th>Units</th>
-                <th>Avg Cost</th>
-                <th>Invested</th>
-                <th>Price</th>
-                <th>Value</th>
-                <th>P/L</th>
-            </tr>
-        </table>
-    </div>
-
 </div>
 
 <div class="footer">© 2025 Portfolio Tracker</div>
@@ -158,24 +143,18 @@ h2 { font-size: 1.2em; }
 // CONFIG
 const cryptoIDs = {
     BTC: "bitcoin",
-    ETH: "ethereum",
-    SOL: "solana",
-    ADA: "cardano",
-    XRP: "ripple",
-    AVAX: "avalanche-2"
+    ETH: "ethereum"
 };
 
-const stockSymbols = ["SPY", "QQQ", "VTI"];
-const cryptoMonthly = 100;
-const stockMonthly = 100;
-
-const cryptoAlloc = { BTC: 0.70, ETH: 0.20, SOL: 0.025, ADA: 0.025, XRP: 0.025, AVAX: 0.025 };
-const stockAlloc = { SPY: 0.333, QQQ: 0.333, VTI: 0.333 };
+const cryptoMonthly = 100;  // total monthly crypto investment
+const cryptoAlloc = { BTC: 0.8, ETH: 0.2 };
 
 // STORAGE
 let portfolio = JSON.parse(localStorage.getItem("portfolioData")) || {
-    crypto: { BTC: { units: 0, invested: 0 }, ETH: { units: 0, invested: 0 }, SOL: { units: 0, invested: 0 }, ADA: { units: 0, invested: 0 }, XRP: { units: 0, invested: 0 }, AVAX: { units: 0, invested: 0 } },
-    stocks: { SPY: { units: 0, invested: 0 }, QQQ: { units: 0, invested: 0 }, VTI: { units: 0, invested: 0 } },
+    crypto: { 
+        BTC: { purchases: [] }, 
+        ETH: { purchases: [] }
+    },
     lastInvestmentDate: null
 };
 
@@ -194,27 +173,25 @@ async function autoInvest() {
 
 async function runInvestment() {
     const cryptoPrices = await fetchCryptoPrices();
-    const stockPrices = await fetchStockPrices();
+    const todayStr = new Date().toISOString().split("T")[0];
 
     for (const sym of Object.keys(cryptoAlloc)) {
         const amount = cryptoMonthly * cryptoAlloc[sym];
         const price = cryptoPrices[sym];
         const units = amount / price;
-        portfolio.crypto[sym].units += units;
-        portfolio.crypto[sym].invested += amount;
+
+        portfolio.crypto[sym].purchases.push({
+            date: todayStr,
+            units: units,
+            price: price,
+            invested: amount
+        });
     }
 
-    for (const sym of Object.keys(stockAlloc)) {
-        const amount = stockMonthly * stockAlloc[sym];
-        const price = stockPrices[sym];
-        const units = amount / price;
-        portfolio.stocks[sym].units += units;
-        portfolio.stocks[sym].invested += amount;
-    }
     savePortfolio();
 }
 
-// PRICE FETCH
+// FETCH PRICES
 async function fetchCryptoPrices() {
     const ids = Object.values(cryptoIDs).join(",");
     const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd`);
@@ -224,49 +201,32 @@ async function fetchCryptoPrices() {
     return prices;
 }
 
-async function fetchStockPrices() {
-    const symbols = ["SPY", "QQQ", "VTI"];
-    let prices = {};
-
-    for (const sym of symbols) {
-        try {
-            const res = await fetch(`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${sym}&apikey=TM5H6I43G6RCU0IB`);
-            const data = await res.json();
-            prices[sym] = parseFloat(data["Global Quote"]["05. price"]);
-        } catch (err) {
-            console.error(`Error fetching ${sym}:`, err);
-            prices[sym] = 0;
-        }
-    }
-
-    return prices;
-}
-
-
 // UPDATE UI
 async function updateUI() {
     const cryptoPrices = await fetchCryptoPrices();
-    const stockPrices = await fetchStockPrices();
-
     updateCryptoTable(cryptoPrices);
-    updateStockTable(stockPrices);
-    updatePortfolioKPIs(cryptoPrices, stockPrices);
+    updatePortfolioKPIs(cryptoPrices);
 }
 
 function updateCryptoTable(prices) {
     const table = document.getElementById("cryptoTable");
     table.querySelectorAll("tr:not(:first-child)").forEach(e => e.remove());
+
     for (const sym of Object.keys(portfolio.crypto)) {
-        const c = portfolio.crypto[sym];
-        if (c.units === 0) continue;
-        const value = c.units * prices[sym];
-        const avg = c.invested / c.units;
-        const pl = value - c.invested;
+        const purchases = portfolio.crypto[sym].purchases;
+        if (purchases.length === 0) continue;
+
+        const totalUnits = purchases.reduce((sum,p)=>sum+p.units,0);
+        const totalInvested = purchases.reduce((sum,p)=>sum+p.invested,0);
+        const avg = totalInvested / totalUnits;
+        const value = totalUnits * prices[sym];
+        const pl = value - totalInvested;
+
         table.innerHTML += `<tr>
             <td>${sym}</td>
-            <td>${c.units.toFixed(6)}</td>
+            <td>${totalUnits.toFixed(6)}</td>
             <td>$${avg.toFixed(2)}</td>
-            <td>$${c.invested.toFixed(2)}</td>
+            <td>$${totalInvested.toFixed(2)}</td>
             <td>$${prices[sym].toFixed(2)}</td>
             <td>$${value.toFixed(2)}</td>
             <td style="color:${pl>=0?"lightgreen":"red"}">$${pl.toFixed(2)}</td>
@@ -274,37 +234,17 @@ function updateCryptoTable(prices) {
     }
 }
 
-function updateStockTable(prices) {
-    const table = document.getElementById("stockTable");
-    table.querySelectorAll("tr:not(:first-child)").forEach(e => e.remove());
-    for (const sym of stockSymbols) {
-        const s = portfolio.stocks[sym];
-        if (s.units === 0) continue;
-        const value = s.units * prices[sym];
-        const avg = s.invested / s.units;
-        const pl = value - s.invested;
-        table.innerHTML += `<tr>
-            <td>${sym}</td>
-            <td>${s.units.toFixed(6)}</td>
-            <td>$${avg.toFixed(2)}</td>
-            <td>$${s.invested.toFixed(2)}</td>
-            <td>$${prices[sym].toFixed(2)}</td>
-            <td>$${value.toFixed(2)}</td>
-            <td style="color:${pl>=0?"lightgreen":"red"}">$${pl.toFixed(2)}</td>
-        </tr>`;
-    }
-}
-
-function updatePortfolioKPIs(cryptoPrices, stockPrices) {
+function updatePortfolioKPIs(cryptoPrices) {
     let invested = 0, value = 0;
+
     for (const sym of Object.keys(portfolio.crypto)) {
-        invested += portfolio.crypto[sym].invested;
-        value += portfolio.crypto[sym].units * cryptoPrices[sym];
+        const purchases = portfolio.crypto[sym].purchases;
+        const totalUnits = purchases.reduce((sum,p)=>sum+p.units,0);
+        const totalInvested = purchases.reduce((sum,p)=>sum+p.invested,0);
+        invested += totalInvested;
+        value += totalUnits * cryptoPrices[sym];
     }
-    for (const sym of stockSymbols) {
-        invested += portfolio.stocks[sym].invested;
-        value += portfolio.stocks[sym].units * stockPrices[sym];
-    }
+
     const pl = value - invested;
     document.getElementById("totalInvested").innerText = invested.toFixed(2);
     document.getElementById("marketValue").innerText = value.toFixed(2);
