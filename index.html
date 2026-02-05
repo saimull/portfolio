@@ -40,7 +40,7 @@
       <tr><td>ETH</td><td id="eth-invested">60</td><td id="eth-value">48.02</td><td id="eth-price">–</td><td id="eth-pl">–</td></tr>
       <tr><td>SPY</td><td id="spy-invested">99</td><td id="spy-value">101.2</td><td id="spy-price">686.19</td><td id="spy-pl">$2.2</td></tr>
       <tr><td>NASDAQ</td><td id="nasdaq-invested">98</td><td id="nasdaq-value">98.3</td><td id="nasdaq-price">605.75</td><td id="nasdaq-pl">$0.3</td></tr>
-      <tr><td>VTI</td><td id="VTI-invested">98</td><td id="VTI-value">102.58</td><td id="VTI-price">336.31</td><td id="VTI-pl">-$4.58</td></tr>
+      <tr><td>VTI</td><td id="VTI-invested">98</td><td id="VTI-value">102.58</td><td id="VTI-price">338.25</td><td id="VTI-pl">$4.58</td></tr>
       <tr><td><strong>Total</strong></td><td id="total-invested">–</td><td id="total-value">–</td><td>–</td><td id="total-pl">–</td></tr>
     </tbody>
   </table>
@@ -49,9 +49,9 @@
 <canvas id="portfolioChart"></canvas>
 
 <script>
-  const invested = { btc: 140, eth: 40, spy: 66, nasdaq: 67, VTI: 67 };
-  const currentValue = { btc: 161.3, eth: 43, spy: 65.58, nasdaq: 65, VTI: 66.58 };
-  const equityPrice = { spy: 683.17, nasdaq: 613.12, VTI: 336.31 };
+  const invested = { btc: 210, eth: 60, spy: 99, nasdaq: 98, VTI: 98 };
+  const currentValue = { btc: 192.59, eth: 48.02, spy: 101.2, nasdaq: 98.3, VTI: 102.58 };
+  const equityPrice = { spy: 686.19, nasdaq: 605.75, VTI: 338.25 };
 
   async function updateCrypto() {
     try {
@@ -116,4 +116,5 @@
 
 </body>
 </html>
+
 
